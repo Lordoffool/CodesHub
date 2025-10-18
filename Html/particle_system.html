@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🌌 Interactive 3D Particle System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            width: 100vw;
+            height: 100vh;
+            background: linear-gradient(135deg, #0a0e27 0%, #1a1a3e 100%);
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+        }
+
+        canvas {
+            display: block;
+            background: radial-gradient(ellipse at center, #1a1a3e 0%, #0a0e27 100%);
+        }
+
+        .controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            color: #00ff88;
+            font-size: 14px;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            z-index: 10;
+        }
+
+        .controls h3 {
+            margin-bottom: 10px;
+            color: #00ffff;
+        }
+
+        .control-item {
+            margin: 8px 0;
+        }
+
+        .control-item input {
+            width: 100px;
+            margin-left: 10px;
+            padding: 5px;
+            background: rgba(0, 255, 136, 0.2);
+            border: 1px solid #00ff88;
+            color: #00ff88;
+            border-radius: 5px;
+        }
+
+        .stats {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            color: #00ff88;
+            font-size: 12px;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            font-family: 'Courier New', monospace;
+        }
+
+        .instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+            color: #00ff88;
+            font-size: 12px;
+            border: 1px solid rgba(0, 255, 136, 0.3);
+            max-width: 300px;
+        }
+
+        button {
+            background: rgba(0, 255, 136, 0.3);
+            border: 1px solid #00ff88;
+            color: #00ff88;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 10px;
+            font-size: 12px;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            background: rgba(0, 255, 136, 0.5);
+            box-shadow: 0 0 10px #00ff88;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+
+    <div class="controls">
+        <h3>⚙️ Controls</h3>
+        <div class="control-item">
+            <label>Particle Count:</label><br>
+            <input type="range" id="particleCount" min="100" max="2000" value="500">
+        </div>
+        <div class="control-item">
+            <label>Gravity:</label><br>
+            <input type="range" id="gravity" min="0" max="1" step="0.01" value="0.1">
+        </div>
+        <div class="control-item">
+            <label>Friction:</label><br>
+            <input type="range" id="friction" min="0.9" max="0.99" step="0.01" value="0.98">
+        </div>
+        <button onclick="resetParticles()">🔄 Reset</button>
+    </div>
+
+    <div class="stats">
+        <div>FPS: <span id="fps">0</span></div>
+        <div>Particles: <span id="particleCount">0</span></div>
+        <div>Mouse: <span id="mousePos">0, 0</span></div>
+    </div>
+
+    <div class="instructions">
+        <strong>🎮 How to Use:</strong><br>
+        • Move your mouse to attract particles<br>
+        • Click to create explosion effect<br>
+        • Adjust sliders to change physics<br>
+        • Press SPACE to pause/resume
+    </div>
+
+    <script>
+        // ==================== PARTICLE CLASS ====================
+        class Particle {
+            constructor(x, y, z) {
+                this.x = x || Math.random() * canvas.width;
+                this.y = y || Math.random() * canvas.height;
+                this.z = z || Math.random() * 500;
+
+                this.vx = (Math.random() - 0.5) * 4;
+                this.vy = (Math.random() - 0.5) * 4;
+                this.vz = (Math.random() - 0.5) * 4;
+
+                this.mass = Math.random() * 0.5 + 0.5;
+                this.life = 1;
+                this.maxLife = Math.random() * 200 + 100;
+                this.hue = Math.random() * 360;
+            }
+
+            update(gravity, friction, mouseX, mouseY, attractionForce) {
+                // Apply gravity
+                this.vy += gravity * this.mass;
+
+                // Attraction to mouse
+                const dx = mouseX - this.x;
+                const dy = mouseY - this.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const minDist = 150;
+
+                if (distance < minDist) {
+                    const force = (1 - distance / minDist) * attractionForce;
+                    this.vx += (dx / distance) * force;
+                    this.vy += (dy / distance) * force;
+                }
+
+                // Apply velocity
+                this.x += this.vx;
+                this.y += this.vy;
+                this.z += this.vz;
+
+                // Apply friction
+                this.vx *= friction;
+                this.vy *= friction;
+                this.vz *= friction;
+
+                // Boundary wrapping
+                if (this.x > canvas.width) this.x = 0;
+                if (this.x < 0) this.x = canvas.width;
+                if (this.y > canvas.height) this.y = 0;
+                if (this.y < 0) this.y = canvas.height;
+
+                // Decay life
+                this.life -= 1 / this.maxLife;
+                this.life = Math.max(0, this.life);
+            }
+
+            draw(ctx, camZ) {
+                // Perspective projection
+                const scale = camZ / (this.z + camZ);
+                const x = this.x;
+                const y = this.y;
+
+                const size = scale * (2 + this.mass);
+                const brightness = this.life;
+
+                // Draw particle
+                ctx.fillStyle = `hsla(${this.hue}, 100%, ${50 * brightness}%, ${brightness})`;
+                ctx.shadowColor = `hsla(${this.hue}, 100%, ${50 * brightness}%, ${brightness * 0.5})`;
+                ctx.shadowBlur = size * 2;
+                ctx.beginPath();
+                ctx.arc(x, y, size, 0, Math.PI * 2);
+                ctx.fill();
+
+                ctx.shadowBlur = 0;
+            }
+        }
+
+        // ==================== MAIN PROGRAM ====================
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        let particles = [];
+        let mouseX = canvas.width / 2;
+        let mouseY = canvas.height / 2;
+        let isPaused = false;
+        let frameCount = 0;
+        let lastTime = Date.now();
+        let fps = 0;
+
+        // ==================== INITIALIZATION ====================
+        function initParticles(count) {
+            particles = [];
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle());
+            }
+        }
+
+        function resetParticles() {
+            initParticles(parseInt(document.getElementById('particleCount').value));
+        }
+
+        // ==================== EVENT LISTENERS ====================
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            document.getElementById('mousePos').textContent = `${Math.round(mouseX)}, ${Math.round(mouseY)}`;
+        });
+
+        document.addEventListener('click', (e) => {
+            // Create explosion effect
+            for (let i = 0; i < 50; i++) {
+                const angle = (Math.PI * 2 * i) / 50;
+                const speed = Math.random() * 8 + 4;
+                const particle = new Particle(e.clientX, e.clientY, 250);
+                particle.vx = Math.cos(angle) * speed;
+                particle.vy = Math.sin(angle) * speed;
+                particles.push(particle);
+            }
+        });
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                isPaused = !isPaused;
+            }
+        });
+
+        document.getElementById('particleCount').addEventListener('input', (e) => {
+            initParticles(parseInt(e.target.value));
+        });
+
+        // ==================== ANIMATION LOOP ====================
+        function animate() {
+            // Clear canvas with fade effect
+            ctx.fillStyle = 'rgba(10, 14, 39, 0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            if (!isPaused) {
+                const gravity = parseFloat(document.getElementById('gravity').value);
+                const friction = parseFloat(document.getElementById('friction').value);
+
+                // Update particles
+                for (let particle of particles) {
+                    particle.update(gravity, friction, mouseX, mouseY, 0.3);
+                }
+
+                // Remove dead particles
+                particles = particles.filter(p => p.life > 0);
+
+                // Draw particles
+                for (let particle of particles) {
+                    particle.draw(ctx, 500);
+                }
+            }
+
+            // Update stats
+            frameCount++;
+            const currentTime = Date.now();
+            if (currentTime - lastTime >= 1000) {
+                fps = frameCount;
+                frameCount = 0;
+                lastTime = currentTime;
+            }
+
+            document.getElementById('fps').textContent = fps;
+            document.getElementById('particleCount').textContent = particles.length;
+
+            requestAnimationFrame(animate);
+        }
+
+        // ==================== START ====================
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+        initParticles(500);
+        animate();
+    </script>
+</body>
+</html>
